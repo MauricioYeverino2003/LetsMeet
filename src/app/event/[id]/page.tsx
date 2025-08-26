@@ -21,6 +21,7 @@ import {
 //import { ImageWithFallback } from "@/components/figma/ImageWithFallback";
 import { ChatSection } from "@/components/ChatSection";
 import { PollsSection } from "@/components/PollsSection";
+import Image from "next/image";
 
 type EventData = {
   id: string;
@@ -39,6 +40,8 @@ type Participant = {
 type PageProps = {
   params: { id: string };
 };
+
+type GridStyle = React.CSSProperties & { ["--cols"]?: number };
 
 export default function EventPage({ params }: PageProps) {
   const { id } = params;
@@ -68,6 +71,13 @@ export default function EventPage({ params }: PageProps) {
   const [isSelecting, setIsSelecting] = useState(false);
   const [dragStartCell, setDragStartCell] = useState<string | null>(null);
   const gridRef = useRef<HTMLDivElement>(null);
+
+  const getRandomBannerUrl = () => {
+    const bannerIds = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+    const randomId = bannerIds[Math.floor(Math.random() * bannerIds.length)];
+    return `https://picsum.photos/800/300?random=${randomId}`;
+  };
+  const [imgSrc, setImgSrc] = useState(eventData.banner || getRandomBannerUrl());
 
   // ---- Derived data ----
   const dates = Array.from(
@@ -119,12 +129,6 @@ export default function EventPage({ params }: PageProps) {
       backgroundColor: `hsl(${hue}, ${saturation}%, ${lightness}%)`,
       opacity,
     };
-  };
-
-  const getRandomBannerUrl = () => {
-    const bannerIds = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
-    const randomId = bannerIds[Math.floor(Math.random() * bannerIds.length)];
-    return `https://picsum.photos/800/300?random=${randomId}`;
   };
 
   // ---- Name + availability interactions ----
@@ -229,20 +233,17 @@ export default function EventPage({ params }: PageProps) {
           {/* Event Header */}
           <div className="mb-8">
             <div className="w-full h-48 md:h-64 mb-6 rounded-xl overflow-hidden bg-muted">
-              <img
-                src={eventData.banner || getRandomBannerUrl()}
-                alt="Event banner"
-                className="w-full h-full object-cover"
-                onError={(e) => {
-                  e.currentTarget.onerror = null;           // prevent infinite loop if fallback fails
-                  e.currentTarget.src = "/fallback.png";    // file you’ll add to /public
-                }}
-              />
-              {/* <ImageWithFallback
-                src={eventData.banner || getRandomBannerUrl()}
-                alt="Event banner"
-                className="w-full h-full object-cover"
-              /> */}
+              <div className="relative w-full h-48 md:h-64 mb-6 rounded-xl overflow-hidden bg-muted">
+                <Image
+                  src={imgSrc}
+                  alt="Event banner"
+                  fill
+                  className="object-cover object-center"   // center crop
+                  sizes="100vw"
+                  onError={() => setImgSrc("/fallback.svg")}
+                  priority
+                />
+              </div>
             </div>
 
             <div className="space-y-4">
@@ -325,7 +326,7 @@ export default function EventPage({ params }: PageProps) {
                       {/* Dates header */}
                       <div
                         className="grid grid-cols-[100px_repeat(var(--cols),_60px)] gap-1 mb-2"
-                        style={{ ["--cols" as any]: dates.length }}
+                        style={{ "--cols" : dates.length } as GridStyle}
                       >
                         <div />
                         {dates.map((d, di) => (
@@ -340,7 +341,7 @@ export default function EventPage({ params }: PageProps) {
                         <div
                           key={hour}
                           className="grid grid-cols-[100px_repeat(var(--cols),_60px)] gap-1 mb-1"
-                          style={{ ["--cols" as any]: dates.length }}
+                          style={{ "--cols": dates.length } as GridStyle}
                         >
                           <div className="text-xs py-2 pr-2 text-right font-medium text-muted-foreground">
                             {formatTime(hour)}

@@ -5,7 +5,7 @@ import * as React from "react";
 import * as RSlider from "@radix-ui/react-slider";
 import { cn } from "./utils";
 
-export interface SliderProps extends React.ComponentPropsWithoutRef<typeof RSlider.Root> {}
+export type SliderProps = React.ComponentPropsWithoutRef<typeof RSlider.Root>
 
 export function Slider({ className, ...props }: SliderProps) {
   return (
