@@ -1,10 +1,20 @@
+"use client"
 // app/page.tsx
 import Link from "next/link";
 import { Calendar, Users, Zap } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { useEffect } from "react";
 
 export default function LandingPage() {
+
+  // In your React client component
+  useEffect(() => {
+    fetch("/api/debug-guest")
+      .then((res) => res.json())
+      .then(console.log);
+  }, []);
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-background to-accent/20">
       {/* Header */}
@@ -33,7 +43,7 @@ export default function LandingPage() {
               <span className="text-primary">Meet Effortlessly</span>
             </h1>
             <p className="text-lg md:text-xl text-muted-foreground mb-8 max-w-2xl mx-auto leading-relaxed">
-              LetsMeetAt makes it simple to create events, coordinate schedules, and bring people together. 
+              LetsMeetAt makes it simple to create events, coordinate schedules, and bring people together.
               Plan your next gathering with just a few clicks.
             </p>
           </div>
