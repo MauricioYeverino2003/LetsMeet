@@ -2,11 +2,12 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+
+// UI COMPONENTS
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
 import { Calendar, ArrowLeft, Users, Share, Check, User } from "lucide-react";
 import Image from "next/image";
-
+// Custom
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -17,11 +18,10 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-
-//import { ImageWithFallback } from "@/components/figma/ImageWithFallback";
 import { ChatSection } from "@/components/ChatSection";
 import { PollsSection } from "@/components/PollsSection";
 
+// TYPES
 type EventData = {
   id: string;
   title: string;
@@ -36,27 +36,26 @@ type Participant = {
   availability: Set<string>; // Set of "dateIndex-timeIndex"
 };
 
-type PageProps = {
-  params: { id: string };
-};
-
 type GridStyle = React.CSSProperties & { ["--cols"]?: number };
 
-export default function EventPage({ id }: {id: string}) {
-  const searchParams = useSearchParams();
+// HELPERS
+import { getGridDefaults } from "@/lib/getGridDefaults";
 
-  // Build a minimal event model from query (fallbacks for quick demo)
-  const defaultTitle = searchParams.get("title") ?? "Untitled Event";
-  const defaultStartDay = Number(searchParams.get("startDay") ?? 0);
-  const defaultEndDay = Number(searchParams.get("endDay") ?? 7);
-  const defaultStartHour = Number(searchParams.get("startHour") ?? 8);
-  const defaultEndHour = Number(searchParams.get("endHour") ?? 22);
+export default function EventClient({ event }: {
+  event: {
+    id: string; title: string; description?: string | null;
+    timezone?: string | null; starts_at: string; ends_at: string;
+    banner_url?: string | null;
+  };
+}) {
+
+  const {startDay: defaultStartDay, endDay: defaultEndDay, startHour: defaultStartHour, endHour: defaultEndHour} = getGridDefaults(event.starts_at, event.ends_at, event.timezone ?? "UTC")
 
   const eventData: EventData = {
-    id,
-    title: defaultTitle,
-    description: searchParams.get("description") ?? "",
-    banner: searchParams.get("banner") ?? undefined,
+    id: event.id,
+    title: event.title,
+    description: event.description ?? "",
+    banner: event.banner_url ?? undefined,
     dateRange: [defaultStartDay, defaultEndDay],
     timeRange: [defaultStartHour, defaultEndHour],
   };

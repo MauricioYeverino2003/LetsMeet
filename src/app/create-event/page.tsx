@@ -12,6 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Slider } from "@/components/ui/slider";
+import { postJson } from "@/lib/fetchJson";
 
 export default function CreateEventPage() {
   // Form state
@@ -56,26 +57,45 @@ export default function CreateEventPage() {
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!title.trim()) {
-      alert("Please enter an event title");
-      return;
-    }
-    // Simple client-only ID
-    const id = Date.now().toString();
+  // inside CreateEventPage component
+async function handleSubmit(e: React.FormEvent) {
+  e.preventDefault();
+  if (!title.trim()) {
+    alert("Please enter an event title");
+    return;
+  }
 
-    // For a quick demo route, pass minimal info via query params.
-    // In a real app you’d POST to an API, then route to /event/[id].
-    const params = new URLSearchParams({
+  // Derive starts/ends in UTC from your sliders (0..14 days, 0..23 hours)
+  // Adjust this if you add a timezone selector in the form.
+  const now = new Date();
+  const start = new Date(now);
+  start.setDate(now.getDate() + dateRange[0]);
+  start.setHours(timeRange[0], 0, 0, 0);
+
+  const end = new Date(now);
+  end.setDate(now.getDate() + dateRange[1]);
+  end.setHours(timeRange[1], 0, 0, 0);
+
+  try {
+    // If you have a timezone selector, pass it here (hardcode for now or add a field)
+    const payload = {
       title: title.trim(),
-      startDay: String(dateRange[0]),
-      endDay: String(dateRange[1]),
-      startHour: String(timeRange[0]),
-      endHour: String(timeRange[1]),
-    });
-    router.push(`/event/${id}?${params.toString()}`);
-  };
+      description: description.trim(),
+      timezone: Intl.DateTimeFormat().resolvedOptions().timeZone, // simple default
+      starts_at: start.toISOString(),
+      ends_at: end.toISOString(),
+      // captchaToken: "<TODO integrate>",     // add when you wire reCAPTCHA
+      // display_name: "<optional from UI>",   // if you want to seed participants
+    };
+
+    const { eventId } = await postJson<{ eventId: string }>("/api/events", payload);
+    router.push(`/event/${eventId}`);
+  } catch (err: any) {
+    console.error(err);
+    alert(err.message || "Failed to create event");
+  }
+}
+
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-background to-accent/20">

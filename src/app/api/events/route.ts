@@ -6,8 +6,7 @@
 // app/api/events/route.ts
 import { NextResponse, NextRequest } from "next/server";
 import { cookies } from "next/headers";
-import { createServerComponentClient } from "@supabase/auth-helpers-nextjs";
-import { createClient } from "@supabase/supabase-js";
+import { createServerClient, type CookieOptions } from "@supabase/ssr";import { createClient } from "@supabase/supabase-js";
 import { getGuestIdFromCookie } from "@/lib/identity";
 import { z } from "zod";
 
@@ -47,12 +46,26 @@ function withinTwoWeeks(startISO: string, endISO: string) {
 
 export async function POST(req: NextRequest) {
   // 1) get Supabase user (if logged in)
-  const cookieStore = cookies();
-  const supabase = createServerComponentClient(
-    { cookies: () => cookieStore },
+  const cookieStore = await cookies();
+  const store = await cookies(); // Next 15: await it
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
-      supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      supabaseKey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      cookies: {
+        // Read ALL cookies (optionally filter by name)
+        getAll(name?: string) {
+          // Next’s RequestCookies.getAll optionally accepts a name
+          const list = name ? store.getAll(name) : store.getAll();
+          return list.map(({ name, value }) => ({ name, value }));
+        },
+        // Set ALL cookies Supabase asks for (atomic batch)
+        setAll(cookiesToSet: { name: string; value: string; options?: CookieOptions }[]) {
+          for (const { name, value, options } of cookiesToSet) {
+            store.set({ name, value, ...(options ?? {}) });
+          }
+        },
+      },
     }
   );
   const { data: { user } } = await supabase.auth.getUser();
