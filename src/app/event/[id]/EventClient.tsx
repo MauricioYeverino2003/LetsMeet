@@ -39,8 +39,13 @@ type Participant = {
 type GridStyle = React.CSSProperties & { ["--cols"]?: number };
 
 // HELPERS
-import { getGridDefaults } from "@/lib/getGridDefaults";
+import { getGridDefaults } from "@/lib/event/getGridDefaults";
+import getMyParticipant from "@/lib/event/getMyParticipant";
+import confirmParticipant from "@/lib/event/comfirmParticipant";
+import saveAvailabilities from "@/lib/event/saveAvailabilities";
+import { cellsToIsoSlotsInZone } from "@/lib/event/cellsToUtcIsoSlots";
 
+// COMPONENT
 export default function EventClient({ event }: {
   event: {
     id: string; title: string; description?: string | null;
@@ -49,8 +54,9 @@ export default function EventClient({ event }: {
   };
 }) {
 
-  const {startDay: defaultStartDay, endDay: defaultEndDay, startHour: defaultStartHour, endHour: defaultEndHour} = getGridDefaults(event.starts_at, event.ends_at, event.timezone ?? "UTC")
+  const { startDay: defaultStartDay, endDay: defaultEndDay, startHour: defaultStartHour, endHour: defaultEndHour } = getGridDefaults(event.starts_at, event.ends_at, event.timezone ?? "UTC")
 
+  // MAYBE INIT EVENT HELPER
   const eventData: EventData = {
     id: event.id,
     title: event.title,
@@ -63,17 +69,35 @@ export default function EventClient({ event }: {
   // ---- Local state ----
   const [guestName, setGuestName] = useState("");
   const [confirmedName, setConfirmedName] = useState<string | null>(null);
+  const [confirming, setConfirming] = useState(false);
   const [participants, setParticipants] = useState<Participant[]>([]);
   const [myAvailability, setMyAvailability] = useState<Set<string>>(new Set());
   const [isSelecting, setIsSelecting] = useState(false);
   const [dragStartCell, setDragStartCell] = useState<string | null>(null);
   const gridRef = useRef<HTMLDivElement>(null);
+  const [submitting, setSubmitting] = useState<boolean>(false)
 
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await getMyParticipant(event.id);
+        if (res.participant) {
+          setConfirmedName(res.participant.display_name);
+          setGuestName(res.participant.display_name);
+        }
+      } catch (e) {
+        // optional: console.warn(e);
+      }
+    })();
+  }, [event.id]);
+
+  // CAN MAYBE MAKE AN IMPORT
   const getRandomBannerUrl = () => {
     const bannerIds = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
     const randomId = bannerIds[Math.floor(Math.random() * bannerIds.length)];
     return `https://picsum.photos/800/300?random=${randomId}`;
   };
+
   const [imgSrc, setImgSrc] = useState(eventData.banner || getRandomBannerUrl());
 
   // ---- Derived data ----
@@ -91,7 +115,7 @@ export default function EventClient({ event }: {
     (_, i) => eventData.timeRange[0] + i
   );
 
-  // ---- Helpers ----
+  // ---- Helpers ---- DEF NEED TO ORGANIZE HELPERS LOOOOL
   const formatDate = (d: Date) =>
     d.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
 
@@ -129,13 +153,22 @@ export default function EventClient({ event }: {
   };
 
   // ---- Name + availability interactions ----
-  const handleConfirmName = () => {
-    if (!guestName.trim()) {
+  const handleConfirmName = async () => {
+    const name = guestName.trim();
+    if (!name) {
       alert("Please enter your name");
       return;
     }
-    if (confirmedName && confirmedName !== guestName.trim()) setMyAvailability(new Set());
-    setConfirmedName(guestName.trim());
+    setConfirming(true);
+    try {
+      const res = await confirmParticipant(event.id, name);
+      setConfirmedName(res.display_name);
+      // If user changed the name before confirming, you already reset myAvailability above.
+    } catch (e: any) {
+      alert(e?.message ?? "Failed to confirm name");
+    } finally {
+      setConfirming(false);
+    }
   };
 
   const handleMouseDown = (e: React.MouseEvent, cellId: string) => {
@@ -171,17 +204,38 @@ export default function EventClient({ event }: {
     setDragStartCell(null);
   };
 
-  // Use setParticipants((participants) => {set participants logic instead})
-  const handleSubmitAvailability = () => {
-    if (!confirmedName) return alert("Please confirm your name first");
+  const handleSubmitAvailability = async () => {
+    if (!confirmedName) {
+      alert("Please confirm your name first");
+      return;
+    }
+    const slots = cellsToIsoSlotsInZone(
+      myAvailability,
+      dates,
+      timeSlots,
+      event.timezone ?? "UTC"
+    );
+    if (slots.length === 0) {
+      alert("Select at least one time slot");
+      return;
+    }
 
-    const existingIdx = participants.findIndex((p) => p.name === confirmedName);
-    const next = [...participants];
-    if (existingIdx >= 0) next[existingIdx].availability = new Set(myAvailability);
-    else next.push({ name: confirmedName, availability: new Set(myAvailability) });
+    setSubmitting(true);
+    try {
+      const res = await saveAvailabilities(event.id, slots, /* replaceAll */ true);
+      // Optimistic local update to your sidebar list:
+      const existingIdx = participants.findIndex((p) => p.name === confirmedName);
+      const next = [...participants];
+      if (existingIdx >= 0) next[existingIdx].availability = new Set(myAvailability);
+      else next.push({ name: confirmedName, availability: new Set(myAvailability) });
+      setParticipants(next);
 
-    setParticipants(next);
-    alert("Availability saved!");
+      alert(`Saved ${res.count} slot${res.count === 1 ? "" : "s"}!`);
+    } catch (e: any) {
+      alert(e?.message ?? "Failed to save availability");
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   // ---- Effects ----
@@ -275,31 +329,23 @@ export default function EventClient({ event }: {
                     </div>
 
                     {!confirmedName ? (
-                      <Button onClick={handleConfirmName}>Confirm Name</Button>
+                      <Button onClick={handleConfirmName} disabled={confirming}>
+                        {confirming ? "Confirming..." : "Confirm Name"}
+                      </Button>
                     ) : (
                       <div className="flex gap-2">
                         <div className="px-3 py-2 bg-green-100 text-green-800 rounded-lg flex items-center gap-2">
                           <Check className="w-4 h-4" />
                           {confirmedName}
                         </div>
-                        <Button
-                          variant="outline"
-                          onClick={() => {
-                            setConfirmedName(null);
-                            setGuestName("");
-                            setMyAvailability(new Set());
-                          }}
-                        >
-                          Change
-                        </Button>
                       </div>
                     )}
                   </div>
 
                   {confirmedName && (
                     <div className="mt-3">
-                      <Button onClick={handleSubmitAvailability} className="w-full">
-                        Save Availability
+                      <Button onClick={handleSubmitAvailability} className="w-full" disabled={submitting}>
+                        {submitting ? "Saving..." : "Save Availability"}
                       </Button>
                     </div>
                   )}
@@ -323,7 +369,7 @@ export default function EventClient({ event }: {
                       {/* Dates header */}
                       <div
                         className="grid grid-cols-[100px_repeat(var(--cols),_60px)] gap-1 mb-2"
-                        style={{ "--cols" : dates.length } as GridStyle}
+                        style={{ "--cols": dates.length } as GridStyle}
                       >
                         <div />
                         {dates.map((d, di) => (
