@@ -7,7 +7,7 @@ export default async function EventPage({ params }: { params: { id: string } }) 
 
   const admin = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY! // only SELECT allowed by RLS
+    process.env.SUPABASE_SERVICE_ROLE_KEY! // only SELECT allowed by RLS
   );
 
   const { data: event, error } = await admin

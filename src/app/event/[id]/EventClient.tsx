@@ -1,6 +1,6 @@
 // app/event/[id]/page.tsx
 "use client";
-
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { useEffect, useRef, useState } from "react";
 
 // UI COMPONENTS
@@ -76,6 +76,101 @@ export default function EventClient({ event }: {
   const [dragStartCell, setDragStartCell] = useState<string | null>(null);
   const gridRef = useRef<HTMLDivElement>(null);
   const [submitting, setSubmitting] = useState<boolean>(false)
+  const supaRef = useRef<SupabaseClient | null>(null);
+
+  //LOADS STATE
+  async function loadEventState(supa: SupabaseClient) {
+    // Grab participants + their slots for this event
+    const { data, error } = await supa
+      .from("event_participants")
+      .select("display_name, availabilities(slot_start,slot_end)")
+      .eq("event_id", event.id);
+
+    if (error) return;
+
+    // Build fast lookup maps to turn slots -> your cell IDs
+    const tz = event.timezone ?? "UTC";
+    const dateKey = (d: Date) =>
+      new Intl.DateTimeFormat("en-CA", { timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit" })
+        .format(d);                           // "YYYY-MM-DD" in event TZ
+    const dayIndex = new Map(dates.map((d, i) => [dateKey(d), i]));
+    const hourIndex = new Map(timeSlots.map((h, i) => [h, i]));
+
+    const next: typeof participants = [];
+
+    for (const row of data ?? []) {
+      const set = new Set<string>();
+      for (const slot of row.availabilities ?? []) {
+        const start = new Date(slot.slot_start);
+        const key = dateKey(start);
+        const hour = Number(
+          new Intl.DateTimeFormat("en-US", { timeZone: tz, hour: "2-digit", hourCycle: "h23" }).format(start)
+        );
+        const di = dayIndex.get(key);
+        const ti = hourIndex.get(hour);
+        if (di != null && ti != null) set.add(`${di}-${ti}`);
+      }
+      next.push({ name: row.display_name, availability: set });
+    }
+
+    setParticipants(next);
+
+    if (confirmedName) {
+      const me = next.find(p => p.name === confirmedName);
+      if (me) setMyAvailability(new Set(me.availability));
+    }
+  }
+
+  //MOUNTS FOR REALTIME UPDATES
+  useEffect(() => {
+  let cleanup = () => {};
+  (async () => {
+    try {
+      // 1) fetch short-lived viewer token for THIS event
+      const resp = await fetch(`/api/events/${event.id}/viewer-token`, { credentials: "same-origin" });
+      const { token } = await resp.json();
+
+      // 2) create a scoped client that carries the JWT (RLS will check event_id claim)
+      const supa = createClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+        {
+          global: { headers: { Authorization: `Bearer ${token}` } },
+          auth: { persistSession: false, autoRefreshToken: false },
+        }
+      );
+      supaRef.current = supa;
+
+      // 3) initial load
+      await loadEventState(supa);
+
+      // 4) realtime subscribe → on any change, reload state
+      const onAnyChange = () => loadEventState(supa);
+      const channel = supa
+        .channel(`event-${event.id}`)
+        .on(
+          "postgres_changes",
+          { event: "*", schema: "public", table: "availabilities", filter: `event_id=eq.${event.id}` },
+          onAnyChange
+        )
+        .on(
+          "postgres_changes",
+          { event: "*", schema: "public", table: "event_participants", filter: `event_id=eq.${event.id}` },
+          onAnyChange
+        )
+        .subscribe();
+
+      cleanup = () => {
+        supa.removeChannel(channel);
+      };
+    } catch (e) {
+      console.error("Realtime init failed", e);
+    }
+  })();
+
+  return () => cleanup();
+}, [event.id, event.timezone]);
+
 
   useEffect(() => {
     (async () => {
