@@ -1,6 +1,6 @@
 // app/event/[id]/page.tsx
 "use client";
-import { createClient, type SupabaseClient, PostgrestError} from "@supabase/supabase-js";
+import { createClient, type SupabaseClient, PostgrestError } from "@supabase/supabase-js";
 
 import { useEffect, useRef, useState } from "react";
 
@@ -21,6 +21,7 @@ import {
 } from "@/components/ui/tooltip";
 import { ChatSection } from "@/components/ChatSection";
 import { PollsSection } from "@/components/PollsSection";
+import { getErrorMessage } from "@/lib/errors";
 
 // TYPES
 type EventData = {
@@ -124,53 +125,53 @@ export default function EventClient({ event }: {
 
   //MOUNTS FOR REALTIME UPDATES
   useEffect(() => {
-  let cleanup = () => {};
-  (async () => {
-    try {
-      // 1) fetch short-lived viewer token for THIS event
-      const resp = await fetch(`/api/events/${event.id}/viewer-token`, { credentials: "same-origin" });
-      const { token } = await resp.json();
+    let cleanup = () => { };
+    (async () => {
+      try {
+        // 1) fetch short-lived viewer token for THIS event
+        const resp = await fetch(`/api/events/${event.id}/viewer-token`, { credentials: "same-origin" });
+        const { token } = await resp.json();
 
-      // 2) create a scoped client that carries the JWT (RLS will check event_id claim)
-      const supa = createClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-        {
-          global: { headers: { Authorization: `Bearer ${token}` } },
-          auth: { persistSession: false, autoRefreshToken: false },
-        }
-      );
-      supaRef.current = supa;
-      supa.realtime.setAuth(token);
+        // 2) create a scoped client that carries the JWT (RLS will check event_id claim)
+        const supa = createClient(
+          process.env.NEXT_PUBLIC_SUPABASE_URL!,
+          process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+          {
+            global: { headers: { Authorization: `Bearer ${token}` } },
+            auth: { persistSession: false, autoRefreshToken: false },
+          }
+        );
+        supaRef.current = supa;
+        supa.realtime.setAuth(token);
 
-      // 3) initial load
-      await loadEventState(supa);
+        // 3) initial load
+        await loadEventState(supa);
 
-      // 4) realtime subscribe → on any change, reload state
-      const onAnyChange = () => loadEventState(supa);
-      const channel = supa
-        .channel(`event-${event.id}`)
-        .on(
-          "postgres_changes",
-          { event: "*", schema: "public", table: "availabilities", filter: `event_id=eq.${event.id}` },
-          onAnyChange
-        )
-        .on(
-          "postgres_changes",
-          { event: "*", schema: "public", table: "event_participants", filter: `event_id=eq.${event.id}` },
-          onAnyChange
-        )
-        .subscribe();
+        // 4) realtime subscribe → on any change, reload state
+        const onAnyChange = () => loadEventState(supa);
+        const channel = supa
+          .channel(`event-${event.id}`)
+          .on(
+            "postgres_changes",
+            { event: "*", schema: "public", table: "availabilities", filter: `event_id=eq.${event.id}` },
+            onAnyChange
+          )
+          .on(
+            "postgres_changes",
+            { event: "*", schema: "public", table: "event_participants", filter: `event_id=eq.${event.id}` },
+            onAnyChange
+          )
+          .subscribe();
 
-      cleanup = () => {
-        supa.removeChannel(channel);
-      };
-    } catch (e) {
-      console.error("Realtime init failed", e);
-    }
-  })();
-  return () => cleanup();
-}, [event.id, event.timezone]);
+        cleanup = () => {
+          supa.removeChannel(channel);
+        };
+      } catch (e) {
+        console.error("Realtime init failed", e);
+      }
+    })();
+    return () => cleanup();
+  }, [event.id, event.timezone]);
 
   // FETCHES IDENTITY IF IT EXISTS
   useEffect(() => {
@@ -261,7 +262,8 @@ export default function EventClient({ event }: {
       setConfirmedName(res.display_name);
       // If user changed the name before confirming, you already reset myAvailability above.
     } catch (e: unknown) { // Unexpected any
-      alert(e?.message ?? "Failed to confirm name");
+      console.error(e);
+      alert(getErrorMessage(e, "Failed to create event"));
     } finally {
       setConfirming(false);
     }
@@ -328,7 +330,8 @@ export default function EventClient({ event }: {
 
       alert(`Saved ${res.count} slot${res.count === 1 ? "" : "s"}!`);
     } catch (e: unknown) { // Unexpected any
-      alert(e?.message ?? "Failed to save availability");
+      console.error(e);
+      alert(getErrorMessage(e, "Failed to create event"));
     } finally {
       setSubmitting(false);
     }

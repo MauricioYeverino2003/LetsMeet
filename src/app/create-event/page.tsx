@@ -13,6 +13,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Slider } from "@/components/ui/slider";
 import { postJson } from "@/lib/fetchJson";
+import { getErrorMessage } from "@/lib/errors";
 
 export default function CreateEventPage() {
   // Form state
@@ -92,7 +93,7 @@ async function handleSubmit(e: React.FormEvent) {
     router.push(`/event/${eventId}`);
   } catch (err: unknown) { //Unexpected any
     console.error(err);
-    alert(err?.message || "Failed to create event");
+    alert(getErrorMessage(err, "Failed to create event"));
   }
 }
 

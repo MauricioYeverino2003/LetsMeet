@@ -1,7 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 import EventClient from "./EventClient";
 
-export default async function EventPage({ params }: { params: { id: string } }) {
+export default async function EventPage({ params }: { params: Promise<{ id: string }> }) {
   
   const { id } = await params
 
