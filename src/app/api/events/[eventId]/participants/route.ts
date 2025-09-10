@@ -5,9 +5,9 @@ import { createClient } from "@supabase/supabase-js";
 import { z } from "zod";
 import { getGuestIdFromCookie } from "@/lib/identity";
 
-const NameSchema = z.object({ display_name: z.string().min(1).max(60) });
+const NameSchema = z.object({ display_name: z.string().min(1).max(30) });
 
-// ON CONFIRM NAME
+// ON CONFIRM NAME CREATES AND BINDS IDENTITY TO ID (AUTH.USER OR GUEST_ID)
 export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ eventId: string }> }

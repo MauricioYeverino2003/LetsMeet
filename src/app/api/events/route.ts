@@ -18,7 +18,7 @@ const CreateEventSchema = z.object({
   ends_at: z.iso.datetime(),   // ISO string
   captchaToken: z.string().min(1).optional(), // optional if you’ll only require for guests
   // (optional) display name to seed event_participants
-  display_name: z.string().min(1).max(60).optional(),
+  display_name: z.string().min(1).max(30).optional(),
 });
 
 

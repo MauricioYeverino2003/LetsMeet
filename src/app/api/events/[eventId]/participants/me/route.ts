@@ -4,7 +4,8 @@ import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { createClient } from "@supabase/supabase-js";
 import { getGuestIdFromCookie } from "@/lib/identity";
 
-// ON EVENT MOUNT
+// BASED ON AUTH.USER OR GUEST_ID IT LOOKS IF USER HAS SUBSCRIBED TO AN IDENTITY YET. IF SO, IT RETRIEVES IDENTITY {id, display_name} ELSE RETURNS null
+// THIS ROUTE IS CALLED ON MOUNT
 export async function GET(
   req: Request,
   { params }: { params: Promise<{ eventId: string }> }

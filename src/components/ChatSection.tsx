@@ -1,9 +1,9 @@
-import { useState } from "react";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 import { ScrollArea } from "./ui/scroll-area";
 import { Send, MessageCircle } from "lucide-react";
+import {useEffect, useRef, useState, useCallback} from "react";
 
 interface Message {
   id: string;
@@ -20,6 +20,38 @@ interface ChatSectionProps {
 export function ChatSection({ confirmedName, participants }: ChatSectionProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState("");
+  // Bottom sentinel
+  const viewportRef = useRef<HTMLDivElement | null>(null);
+  const [pinned, setPinned] = useState(true); // auto-scroll only when user is at bottom
+
+
+  const handleViewportScroll = useCallback(() => {
+  const v = viewportRef.current;
+  if (!v) return;
+  const delta = v.scrollHeight - v.clientHeight - v.scrollTop;
+  setPinned(delta < 4); // within 4px of bottom counts as "pinned"
+}, []);
+
+useEffect(() => {
+  const v = viewportRef.current;
+  if (!v) return;
+
+  // If first message OR user is pinned, scroll to bottom AFTER DOM updates
+  if (messages.length <= 1 || pinned) {
+    requestAnimationFrame(() => {
+      v.scrollTo({ top: v.scrollHeight, behavior: "smooth" });
+    });
+  }
+}, [messages.length, confirmedName, pinned]);
+
+useEffect(() => {
+  const v = viewportRef.current;
+  if (!v) return;
+  const onScroll = () => handleViewportScroll();
+  v.addEventListener("scroll", onScroll, { passive: true });
+  handleViewportScroll(); // initialize pinned
+  return () => v.removeEventListener("scroll", onScroll);
+}, [handleViewportScroll]);
 
   const handleSendMessage = (e: React.FormEvent) => {
     e.preventDefault();
@@ -78,9 +110,12 @@ export function ChatSection({ confirmedName, participants }: ChatSectionProps) {
         </CardTitle>
       </CardHeader>
       <CardContent>
-        <div className="flex flex-col h-80">
+        <div className="flex flex-col h-80 min-h-0">
           {/* Messages */}
-          <ScrollArea className="flex-1 pr-4 mb-4">
+          <ScrollArea 
+          className="flex-1 min-h-0 pr-4 mb-4"
+          viewportRef={viewportRef}
+          >
             <div className="space-y-4">
               {messages.length === 0 ? (
                 <div className="text-center py-8">

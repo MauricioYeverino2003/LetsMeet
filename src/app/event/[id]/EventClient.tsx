@@ -78,7 +78,7 @@ export default function EventClient({ event }: {
   const [submitting, setSubmitting] = useState<boolean>(false)
   const supaRef = useRef<SupabaseClient | null>(null);
 
-  //LOADS STATE
+  //LOADS STATE OF EVENT. COULD BE FUNCTION IN LIB
   async function loadEventState(supa: SupabaseClient) {
     // Grab participants + their slots for this event
     const { data, error } = await supa
@@ -88,7 +88,7 @@ export default function EventClient({ event }: {
 
     if (error) return;
 
-    // Build fast lookup maps to turn slots -> your cell IDs
+    // Build fast lookup maps to turn slots -> cell IDs
     const tz = event.timezone ?? "UTC";
     const dateKey = (d: Date) =>
       new Intl.DateTimeFormat("en-CA", { timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit" })
@@ -167,11 +167,10 @@ export default function EventClient({ event }: {
       console.error("Realtime init failed", e);
     }
   })();
-
   return () => cleanup();
 }, [event.id, event.timezone]);
 
-
+  // FETCHES IDENTITY IF IT EXISTS
   useEffect(() => {
     (async () => {
       try {
@@ -318,7 +317,7 @@ export default function EventClient({ event }: {
     setSubmitting(true);
     try {
       const res = await saveAvailabilities(event.id, slots, /* replaceAll */ true);
-      // Optimistic local update to your sidebar list:
+      // Optimistic local update to sidebar list:
       const existingIdx = participants.findIndex((p) => p.name === confirmedName);
       const next = [...participants];
       if (existingIdx >= 0) next[existingIdx].availability = new Set(myAvailability);
