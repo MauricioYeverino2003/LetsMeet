@@ -140,6 +140,7 @@ export default function EventClient({ event }: {
         }
       );
       supaRef.current = supa;
+      supa.realtime.setAuth(token);
 
       // 3) initial load
       await loadEventState(supa);
