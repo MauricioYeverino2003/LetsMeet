@@ -90,9 +90,9 @@ async function handleSubmit(e: React.FormEvent) {
 
     const { eventId } = await postJson<{ eventId: string }>("/api/events", payload);
     router.push(`/event/${eventId}`);
-  } catch (err: any) {
+  } catch (err: unknown) { //Unexpected any
     console.error(err);
-    alert(err.message || "Failed to create event");
+    alert(err?.message || "Failed to create event");
   }
 }
 

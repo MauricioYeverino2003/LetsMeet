@@ -18,7 +18,7 @@ const ScrollArea = React.forwardRef<HTMLDivElement, RootProps>(
         {...props}
       >
         <ScrollAreaPrimitive.Viewport
-          ref={viewportRef as any}
+          ref={viewportRef} // Unexpected any
           data-slot="scroll-area-viewport"
           className="h-full w-full rounded-[inherit] overscroll-contain focus-visible:ring-ring/50 transition-[color,box-shadow] outline-none focus-visible:ring-[3px] focus-visible:outline-1"
         >

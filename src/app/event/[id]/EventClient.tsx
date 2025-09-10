@@ -1,6 +1,7 @@
 // app/event/[id]/page.tsx
 "use client";
-import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import { createClient, type SupabaseClient, PostgrestError} from "@supabase/supabase-js";
+
 import { useEffect, useRef, useState } from "react";
 
 // UI COMPONENTS
@@ -259,7 +260,7 @@ export default function EventClient({ event }: {
       const res = await confirmParticipant(event.id, name);
       setConfirmedName(res.display_name);
       // If user changed the name before confirming, you already reset myAvailability above.
-    } catch (e: any) {
+    } catch (e: unknown) { // Unexpected any
       alert(e?.message ?? "Failed to confirm name");
     } finally {
       setConfirming(false);
@@ -326,7 +327,7 @@ export default function EventClient({ event }: {
       setParticipants(next);
 
       alert(`Saved ${res.count} slot${res.count === 1 ? "" : "s"}!`);
-    } catch (e: any) {
+    } catch (e: unknown) { // Unexpected any
       alert(e?.message ?? "Failed to save availability");
     } finally {
       setSubmitting(false);
