@@ -1,6 +1,6 @@
 // app/event/[id]/page.tsx
 "use client";
-import { createClient, type SupabaseClient, PostgrestError } from "@supabase/supabase-js";
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
 import { useEffect, useRef, useState } from "react";
 
@@ -22,6 +22,7 @@ import {
 import { ChatSection } from "@/components/ChatSection";
 import { PollsSection } from "@/components/PollsSection";
 import { getErrorMessage } from "@/lib/errors";
+import { getUrl } from "@/lib/getUrl"
 
 // TYPES
 type EventData = {
@@ -79,6 +80,7 @@ export default function EventClient({ event }: {
   const gridRef = useRef<HTMLDivElement>(null);
   const [submitting, setSubmitting] = useState<boolean>(false)
   const supaRef = useRef<SupabaseClient | null>(null);
+  const [copied, setCopied] = useState(false);
 
   //LOADS STATE OF EVENT. COULD BE FUNCTION IN LIB
   async function loadEventState(supa: SupabaseClient) {
@@ -337,12 +339,40 @@ export default function EventClient({ event }: {
     }
   };
 
-  // ---- Effects ----
+  const handleCopy = async () => {
+    const url = getUrl(event.id);
+
+    // Prefer modern Clipboard API (HTTPS or localhost)
+    try {
+      if (navigator.clipboard?.writeText && window.isSecureContext !== false) {
+        await navigator.clipboard.writeText(url);
+      } else {
+        // Silent legacy fallback (no window, no alert)
+        const ta = document.createElement("textarea");
+        ta.value = url;
+        ta.setAttribute("readonly", "");
+        ta.style.position = "fixed";
+        ta.style.opacity = "0";
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand("copy");
+        document.body.removeChild(ta);
+      }
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 2000);
+    } catch (err) {
+      // If copy fails, just log; keep UX silent as requested
+      console.error("Clipboard copy failed:", err);
+    }
+  };
+
+  // ADDS EVENT LISTENER TO MOUSEDOWN TO MOUSEUP
   useEffect(() => {
     document.addEventListener("mouseup", handleMouseUp);
     return () => document.removeEventListener("mouseup", handleMouseUp);
   }, []);
 
+  // HANDLES CONFIRMED NAMED UI
   useEffect(() => {
     if (!confirmedName) return;
     const existing = participants.find((p) => p.name === confirmedName);
@@ -364,9 +394,24 @@ export default function EventClient({ event }: {
             </Link>
 
             <div className="flex items-center gap-3">
-              <Button variant="outline" size="sm" className="flex items-center gap-2">
-                <Share className="w-4 h-4" />
-                Share Event
+              <Button variant="outline"
+                size="sm"
+                className="flex items-center gap-2 cursor-pointer"
+                onClick={handleCopy}
+                aria-live="polite"
+                aria-atomic="true"
+                role="status">
+                {copied ? (
+                  <>
+                    <Check className="w-4 h-4" />
+                    Copied!
+                  </>
+                ) : (
+                  <>
+                    <Share className="w-4 h-4" />
+                    Copy Link
+                  </>
+                )}
               </Button>
               <Button asChild variant="ghost" size="sm" className="flex items-center gap-2">
                 <Link href="/">
