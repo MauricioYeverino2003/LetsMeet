@@ -39,6 +39,15 @@ type Participant = {
   availability: Set<string>; // Set of "dateIndex-timeIndex"
 };
 
+type MessageRow = {
+  id: string;
+  event_id: string;
+  participant_id: string;
+  display_name: string;
+  content: string;
+  created_at: string;
+}
+
 type GridStyle = React.CSSProperties & { ["--cols"]?: number };
 
 // HELPERS
@@ -81,9 +90,14 @@ export default function EventClient({ event }: {
   const [submitting, setSubmitting] = useState<boolean>(false)
   const supaRef = useRef<SupabaseClient | null>(null);
   const [copied, setCopied] = useState(false);
+  const [messages, setMessages] = useState<MessageRow[]>([])// Not sure of type of thee messages
+  const [draft, setDraft] = useState("");
+  const [participantId, setParticipantId] = useState<string | null>(null);
+  const seenMessageIds = useRef<Set<string>>(new Set());
 
   //LOADS STATE OF EVENT. COULD BE FUNCTION IN LIB
   async function loadEventState(supa: SupabaseClient) {
+    // LOAD AND INITIALIZE USER, PARTICIPANTS AND AVAILABILTIES
     // Grab participants + their slots for this event
     const { data, error } = await supa
       .from("event_participants")
@@ -123,6 +137,18 @@ export default function EventClient({ event }: {
       const me = next.find(p => p.name === confirmedName);
       if (me) setMyAvailability(new Set(me.availability));
     }
+
+    // LOAD MESSAGES
+    const { data: msgs } = await supa
+      .from("messages")
+      .select("*")
+      .eq("event_id", event.id)
+      .order("created_at", { ascending: false })
+      .limit(100);
+
+    setMessages((msgs ?? []).reverse());
+    seenMessageIds.current = new Set((msgs ?? []).map(m => m.id));
+
   }
 
   //MOUNTS FOR REALTIME UPDATES
@@ -163,6 +189,17 @@ export default function EventClient({ event }: {
             { event: "*", schema: "public", table: "event_participants", filter: `event_id=eq.${event.id}` },
             onAnyChange
           )
+          .on(
+            "postgres_changes",
+            { event: "*", schema: "public", table: "messages", filter: `event_id=eq.${event.id}` },
+            (payload) => {
+              if (payload.eventType !== "INSERT") return;
+              const m = payload.new as MessageRow;
+              if (seenMessageIds.current.has(m.id)) return;        // <-- dedupe
+              seenMessageIds.current.add(m.id);
+              setMessages(prev => [...prev, m]);
+            }
+          )
           .subscribe();
 
         cleanup = () => {
@@ -183,6 +220,7 @@ export default function EventClient({ event }: {
         if (res.participant) {
           setConfirmedName(res.participant.display_name);
           setGuestName(res.participant.display_name);
+          setParticipantId(res.participant.id);
         }
       } catch (e) {
         // optional: console.warn(e);
@@ -262,6 +300,7 @@ export default function EventClient({ event }: {
     try {
       const res = await confirmParticipant(event.id, name);
       setConfirmedName(res.display_name);
+      setParticipantId(res.participantId);
       // If user changed the name before confirming, you already reset myAvailability above.
     } catch (e: unknown) { // Unexpected any
       console.error(e);
@@ -338,6 +377,23 @@ export default function EventClient({ event }: {
       setSubmitting(false);
     }
   };
+
+  // SEND MESSAGE HELPER
+  async function sendMessage() {
+    const content = draft.trim();
+    if (!content) return;
+    if (!participantId) { alert("Confirm your name first"); return; }
+
+    const supa = supaRef.current!;
+    const { error } = await supa.from("messages").insert({
+      event_id: event.id,
+      participant_id: participantId,
+      display_name: confirmedName ?? "",   // DB trigger can overwrite this safely
+      content
+    });
+    if (error) return alert(error.message);
+    setDraft("");
+  }
 
   const handleCopy = async () => {
     const url = getUrl(event.id);
@@ -615,7 +671,13 @@ export default function EventClient({ event }: {
               </Card>
 
               {/* Chat & Polls (your existing client components) */}
-              <ChatSection confirmedName={confirmedName} participants={participants.map((p) => p.name)} />
+              <ChatSection
+                confirmedName={confirmedName}
+                messages={messages}
+                draft={draft}
+                setDraft={setDraft}
+                onSend={sendMessage}
+              />
               <PollsSection confirmedName={confirmedName} participants={participants.map((p) => p.name)} />
             </div>
           </div>
